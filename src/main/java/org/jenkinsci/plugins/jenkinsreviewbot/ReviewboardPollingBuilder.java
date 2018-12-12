@@ -185,6 +185,7 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
         listener.getLogger().println(review.getUrl());
         if (!disableAdvanceNotice) ReviewboardOps.getInstance().postComment(con, review.getUrl(), Messages.ReviewboardPollingBuilder_Notice(), false, false);
         ParameterizedJobMixIn.scheduleBuild2(job, -1, new ParametersAction(new ReviewboardParameterValue(review.getUrl())));
+        processedReviews.add(review);
       }
     } catch (Exception e) {
       listener.getLogger().println("Problem starting the Jenkins job!");
@@ -193,7 +194,7 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
     // Write the reviews to the file, they will be processedReviews for the next run
     listener.getLogger().println("Writing reviews to file...");
     try {
-      writeReviews(file, reviews);
+      writeReviews(file, processedReviews);
     } catch (Exception e) {
       listener.getLogger().println("Couldn't write to file!");
       e.printStackTrace(listener.getLogger());
