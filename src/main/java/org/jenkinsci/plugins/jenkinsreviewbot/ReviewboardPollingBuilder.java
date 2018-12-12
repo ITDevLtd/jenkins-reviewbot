@@ -64,7 +64,7 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
   private int reviewbotRepoId = -1;
   private boolean restrictByUser = true;
   private boolean disableAdvanceNotice = false;
-  private String tempFileName = "/processedReviews.ser";
+  private transient final String tempFileName = "/processedReviews.ser";
 
   @DataBoundConstructor
   public ReviewboardPollingBuilder(String reviewbotJobName) {
@@ -161,38 +161,41 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
     listener.getLogger().println("Got " + reviews.size() + " reviews");
     // No need to continue if there are no reviews
     if (reviews.isEmpty()) return;
-    // Write the reviews to the file, they will be processedReviews for the next run
-    listener.getLogger().println("Writing reviews to file...");
-    try {
-      writeReviews(file, reviews);
-    } catch (Exception e) {
-      listener.getLogger().println("Couldn't write to file!");
-      e.printStackTrace(listener.getLogger());
-    }
     // Filter reviews out if they have already been built
+    HashSet<Review.Slim> unprocessedReviews = new HashSet<Review.Slim>(reviews);
     try {
-      reviews.removeAll(processedReviews);
+      unprocessedReviews.removeAll(processedReviews);
     } catch (Exception e) {
       listener.getLogger().println("Couldn't remove processedReviews from reviews");
       e.printStackTrace(listener.getLogger());
     }
-    listener.getLogger().println("After removing previously processed, left with " + reviews.size() + " reviews");
+    listener.getLogger().println("After removing previously processed, left with " + unprocessedReviews.size() + " reviews");
     // No need to continue if there are no reviews to process
-    if (reviews.isEmpty()) return;
+    if (unprocessedReviews.isEmpty()) return;
     try {
       // Initialize Jenkins build job
       Jenkins jenkins = Jenkins.getInstance();
       Job job = jenkins.getItem(reviewbotJobName, jenkins, Job.class);
-      if (job == null)  throw new AbortException("ERROR: Job named " + reviewbotJobName + " not found!");
+      if (job == null) {
+        throw new AbortException("ERROR: Job named " + reviewbotJobName + " not found!");
+      }
       listener.getLogger().println("Found job " + reviewbotJobName);
       // Start a job for each unprocessed review
-      for (Review.Slim review : reviews) {
+      for (Review.Slim review : unprocessedReviews) {
         listener.getLogger().println(review.getUrl());
         if (!disableAdvanceNotice) ReviewboardOps.getInstance().postComment(con, review.getUrl(), Messages.ReviewboardPollingBuilder_Notice(), false, false);
         ParameterizedJobMixIn.scheduleBuild2(job, -1, new ParametersAction(new ReviewboardParameterValue(review.getUrl())));
       }
     } catch (Exception e) {
       listener.getLogger().println("Problem starting the Jenkins job!");
+      e.printStackTrace(listener.getLogger());
+    }
+    // Write the reviews to the file, they will be processedReviews for the next run
+    listener.getLogger().println("Writing reviews to file...");
+    try {
+      writeReviews(file, reviews);
+    } catch (Exception e) {
+      listener.getLogger().println("Couldn't write to file!");
       e.printStackTrace(listener.getLogger());
     }
   }

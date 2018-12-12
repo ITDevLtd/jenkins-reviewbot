@@ -221,11 +221,11 @@ public class ReviewboardOps {
         return new Review(url, lastUploadTime, input);
       }
     });
-    // Remove revies requests that have already been reviewed by this program
+    // Remove reviews requests that have already been reviewed by this program
     Collection<Review> unhandled = Collections2.filter(hotRich, new Predicate<Review>() {
       public boolean apply(Review input) {
         if (input.getLastUpdate() == null) return false; //no diffs found
-        String commentsUrl  = con.getCommentsUrl(input.getInput().id);
+        String commentsUrl = con.getCommentsUrl(input.getInput().id);
         Response c = getResponse(http, commentsUrl, Response.class);
         for (Item r : c.reviews.array) {
           if (con.getReviewboardUsername().equals(r.links.user.title) &&
