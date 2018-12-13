@@ -151,18 +151,18 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
     ReviewboardConnection con = ReviewboardConnection.fromConfiguration();
     // Get reviews from Reviewboard
     listener.getLogger().println("Query: " + con.getPendingReviewsUrl(restrictByUser, reviewbotRepoId));
-    HashSet<Review.Slim> reviews = new HashSet();
+    HashSet<Review.Slim> pendingReviews = new HashSet();
     try {
-      reviews = new HashSet(ReviewboardOps.getInstance().getPendingReviews(con, period, restrictByUser, reviewbotRepoId));
+      pendingReviews = new HashSet(ReviewboardOps.getInstance().getPendingReviews(con, period, restrictByUser, reviewbotRepoId));
     } catch (Exception e) {
       listener.getLogger().println("Couldn't get pending reviews from Reviewboard");
       e.printStackTrace(listener.getLogger());
     }
-    listener.getLogger().println("Got " + reviews.size() + " reviews");
+    listener.getLogger().println("Got " + pendingReviews.size() + " reviews");
     // No need to continue if there are no reviews
-    if (reviews.isEmpty()) return;
+    if (pendingReviews.isEmpty()) return;
     // Filter reviews out if they have already been built
-    HashSet<Review.Slim> unprocessedReviews = new HashSet<Review.Slim>(reviews);
+    HashSet<Review.Slim> unprocessedReviews = new HashSet<Review.Slim>(pendingReviews);
     try {
       unprocessedReviews.removeAll(processedReviews);
     } catch (Exception e) {
@@ -172,6 +172,8 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
     listener.getLogger().println("After removing previously processed, left with " + unprocessedReviews.size() + " reviews");
     // No need to continue if there are no reviews to process
     if (unprocessedReviews.isEmpty()) return;
+    // Remove processedReviews that are older than the checkback period
+    processedReviews.retainAll(pendingReviews);
     try {
       // Initialize Jenkins build job
       Jenkins jenkins = Jenkins.getInstance();
@@ -185,7 +187,7 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
         listener.getLogger().println(review.getUrl());
         if (!disableAdvanceNotice) ReviewboardOps.getInstance().postComment(con, review.getUrl(), Messages.ReviewboardPollingBuilder_Notice(), false, false);
         ParameterizedJobMixIn.scheduleBuild2(job, -1, new ParametersAction(new ReviewboardParameterValue(review.getUrl())));
-        reviews.remove(review);
+        processedReviews.add(review);
       }
     } catch (Exception e) {
       listener.getLogger().println("Problem starting the Jenkins job!");
@@ -194,7 +196,7 @@ public class ReviewboardPollingBuilder extends Builder implements SimpleBuildSte
     // Write the reviews to the file, they will be processedReviews for the next run
     listener.getLogger().println("Writing reviews to file...");
     try {
-      writeReviews(file, reviews);
+      writeReviews(file, processedReviews);
     } catch (Exception e) {
       listener.getLogger().println("Couldn't write to file!");
       e.printStackTrace(listener.getLogger());
